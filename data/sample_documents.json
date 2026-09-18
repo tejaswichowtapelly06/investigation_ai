@@ -1,0 +1,117 @@
+[
+  {
+    "document_id": "INC-1042",
+    "document_type": "incident_report",
+    "title": "Order API Latency Incident - September 16, 2024",
+    "service": "orders-api",
+    "date": "2024-09-16",
+    "version": "v2.8.1",
+    "content": "On September 16, 2024, the Order API experienced significant latency issues starting at 03:00 UTC. Response times increased from an average of 50ms to over 2000ms. The incident affected approximately 15% of customer orders. Initial investigation pointed to database connection pool exhaustion. Root cause analysis revealed that a recent deployment (DEP-882) introduced a connection leak in the database layer. The deployment was rolled back at 04:30 UTC, and service was restored to normal levels by 05:00 UTC. Post-incident review identified that proper connection pool monitoring was not in place.",
+    "source": "/data/incidents/INC-1042.md",
+    "metadata": {
+      "incident_id": "INC-1042",
+      "severity": "high",
+      "author": "ops-team"
+    }
+  },
+  {
+    "document_id": "DEP-882",
+    "document_type": "deployment_note",
+    "title": "Deployment v2.8.1 - Order API",
+    "service": "orders-api",
+    "date": "2024-09-15",
+    "version": "v2.8.1",
+    "content": "Deployment of Order API version v2.8.1 completed successfully at 18:00 UTC on September 15, 2024. Changes include: updated database connection pool configuration, new query optimization features, and performance improvements. The deployment was performed using blue-green strategy with zero downtime. No issues were reported during the deployment process. The new version includes a connection pool size increase from 10 to 20 connections.",
+    "source": "/data/deployments/DEP-882.md",
+    "metadata": {
+      "deployment_id": "DEP-882",
+      "author": "devops-team"
+    }
+  },
+  {
+    "document_id": "PM-211",
+    "document_type": "postmortem",
+    "title": "Postmortem: Order API Database Connection Pool Exhaustion",
+    "service": "orders-api",
+    "date": "2024-08-10",
+    "version": "v2.5.0",
+    "content": "On August 10, 2024, the Order API experienced database connection pool exhaustion similar to the September 16 incident. The root cause was identified as a missing connection close statement in the user authentication module. The fix involved adding proper connection cleanup in the finally block of database operations. This incident was caused by a different issue than the September 16 incident, though both involved database connection management. The August incident was resolved by patching the authentication module.",
+    "source": "/data/postmortems/PM-211.md",
+    "metadata": {
+      "postmortem_id": "PM-211",
+      "author": "sre-team"
+    }
+  },
+  {
+    "document_id": "GUIDE-12",
+    "document_type": "troubleshooting_guide",
+    "title": "Troubleshooting: Database Connection Issues",
+    "service": "orders-api",
+    "date": "2024-07-01",
+    "version": "",
+    "content": "When experiencing database connection issues with the Order API, first check the connection pool metrics. If the pool is exhausted, restart the service to clear stale connections. Monitor the database for long-running queries that may be holding connections. Check the application logs for connection timeout errors. If connection leaks are suspected, enable connection pool logging to identify the source. Restart Service A if connection pool exhaustion persists after clearing stale connections.",
+    "source": "/data/guides/GUIDE-12.md",
+    "metadata": {
+      "guide_id": "GUIDE-12",
+      "author": "ops-team"
+    }
+  },
+  {
+    "document_id": "GUIDE-41",
+    "document_type": "troubleshooting_guide",
+    "title": "Troubleshooting: Service Dependencies",
+    "service": "orders-api",
+    "date": "2024-09-01",
+    "version": "",
+    "content": "When troubleshooting service dependency failures, do not restart Service A during dependency failures. Check the health of downstream services first. If a dependency is unhealthy, implement circuit breaker patterns. Monitor the dependency service's metrics before restarting the calling service. Restarting during dependency failures can mask the root cause and lead to cascading failures. Always investigate the dependency service status before taking action on the calling service.",
+    "source": "/data/guides/GUIDE-41.md",
+    "metadata": {
+      "guide_id": "GUIDE-41",
+      "author": "sre-team"
+    }
+  },
+  {
+    "document_id": "INC-300",
+    "document_type": "incident_report",
+    "title": "Catalog API Latency - September 20, 2024",
+    "service": "catalog-api",
+    "date": "2024-09-20",
+    "version": "v1.5.2",
+    "content": "On September 20, 2024, the Catalog API experienced latency issues similar to the Order API incident. Response times increased significantly during peak hours. Investigation revealed database saturation as the root cause. The database was experiencing high CPU utilization due to inefficient queries. The issue was resolved by optimizing the problematic queries and adding appropriate indexes. This incident involved a different service (catalog-api vs orders-api) and a different root cause (database saturation vs connection leak).",
+    "source": "/data/incidents/INC-300.md",
+    "metadata": {
+      "incident_id": "INC-300",
+      "severity": "medium",
+      "author": "ops-team"
+    }
+  },
+  {
+    "document_id": "INC-301",
+    "document_type": "incident_report",
+    "title": "Catalog API Latency - September 21, 2024",
+    "service": "catalog-api",
+    "date": "2024-09-21",
+    "version": "v1.5.2",
+    "content": "On September 21, 2024, the Catalog API experienced another latency incident. This was a continuation of the previous day's issues. The database saturation persisted despite the previous day's fixes. Further investigation revealed that the query optimizations were not sufficient. Additional database resources were provisioned and the query patterns were further optimized. This incident is related to INC-300 but represents a separate occurrence of the same underlying issue.",
+    "source": "/data/incidents/INC-301.md",
+    "metadata": {
+      "incident_id": "INC-301",
+      "severity": "medium",
+      "author": "ops-team"
+    }
+  },
+  {
+    "document_id": "ARCH-001",
+    "document_type": "architecture_document",
+    "title": "Order API Architecture Overview",
+    "service": "orders-api",
+    "date": "2024-06-01",
+    "version": "v2.0.0",
+    "content": "The Order API is a microservice responsible for processing customer orders. It connects to the orders database using a connection pool with configurable size. The service communicates with the Catalog API for product information and the Payment API for payment processing. The service is deployed using Kubernetes with horizontal pod autoscaling. Database connections are managed through a connection pool that must be properly monitored to prevent exhaustion. The service uses blue-green deployments for zero-downtime updates.",
+    "source": "/data/architecture/ARCH-001.md",
+    "metadata": {
+      "document_id": "ARCH-001",
+      "author": "architecture-team"
+    }
+  }
+]

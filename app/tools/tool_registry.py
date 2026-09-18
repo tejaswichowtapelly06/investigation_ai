@@ -35,6 +35,7 @@ class ToolRegistry:
     """
     Registry for tool providers.
     Allows swapping implementations (mock → Qdrant/PostgreSQL) without changing agents.
+    This is a dependency injection container that can be passed to agents.
     """
     
     def __init__(self):
@@ -70,17 +71,11 @@ class ToolRegistry:
         return self._evidence_provider is not None
 
 
-# Global registry instance (can be replaced with dependency injection framework later)
-_global_registry = ToolRegistry()
-
-
-def get_tool_registry() -> ToolRegistry:
-    """Get the global tool registry."""
-    return _global_registry
-
-
-def register_default_providers() -> None:
-    """Register default mock providers for development/testing."""
+def create_default_registry() -> ToolRegistry:
+    """
+    Create a tool registry with default mock providers for development/testing.
+    This function should be used to create the registry, which is then passed to the workflow.
+    """
     from app.tools.mock_database import MockSearchDatabase
     from app.tools.mock_analysis import MockEvidenceAnalysis
     
@@ -104,5 +99,82 @@ def register_default_providers() -> None:
             comparisons = compare_all_incidents(documents)
             return [comp.model_dump() for comp in comparisons]
     
-    _global_registry.register_search_provider(MockSearchProvider())
-    _global_registry.register_evidence_provider(MockEvidenceProvider())
+    registry = ToolRegistry()
+    registry.register_search_provider(MockSearchProvider())
+    registry.register_evidence_provider(MockEvidenceProvider())
+    
+    return registry
+
+
+def create_production_registry() -> ToolRegistry:
+    """
+    Create a tool registry with production providers (Qdrant + PostgreSQL).
+    This function should be used when USE_MOCK_DATA is set to false.
+    Falls back to mock providers if production services are unavailable.
+    """
+    from app.config.settings import settings
+    from app.tools.production_search import ProductionSearchTool
+    from app.tools.production_evidence import ProductionEvidenceTool
+    
+    class ProductionSearchProvider:
+        def __init__(self):
+            self._search_tool = ProductionSearchTool()
+            self._search_tool.initialize()
+        
+        def get_search_tool(self) -> SearchTool:
+            return self._search_tool
+    
+    class ProductionEvidenceProvider:
+        def __init__(self):
+            self._evidence_tool = ProductionEvidenceTool()
+            self._evidence_tool.initialize()
+        
+        def extract_evidence(self, documents: List[DocumentResult]) -> List[Dict[str, Any]]:
+            return self._evidence_tool.extract_evidence(documents)
+        
+        def detect_contradictions(self, documents: List[DocumentResult]) -> List[Dict[str, Any]]:
+            return self._evidence_tool.detect_contradictions(documents)
+        
+        def compare_incidents(self, documents: List[DocumentResult]) -> List[Dict[str, Any]]:
+            return self._evidence_tool.compare_incidents(documents)
+    
+    registry = ToolRegistry()
+    
+    try:
+        registry.register_search_provider(ProductionSearchProvider())
+        registry.register_evidence_provider(ProductionEvidenceProvider())
+        logger.info("Production tool registry created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create production registry, falling back to mock: {e}")
+        return create_default_registry()
+    
+    return registry
+
+
+# Global registry instance for backward compatibility during transition
+# TODO: Remove this after all callers are updated to use dependency injection
+_global_registry: Optional[ToolRegistry] = None
+
+
+def get_tool_registry() -> ToolRegistry:
+    """
+    Get the global tool registry (deprecated).
+    
+    This is a temporary backward-compatibility function during the transition
+    to proper dependency injection. New code should pass ToolRegistry instances
+    directly to agents instead of using this global singleton.
+    """
+    global _global_registry
+    if _global_registry is None:
+        _global_registry = create_default_registry()
+    return _global_registry
+
+
+def register_default_providers() -> None:
+    """
+    Register default providers in the global registry (deprecated).
+    
+    This function is deprecated. Use create_default_registry() instead.
+    """
+    global _global_registry
+    _global_registry = create_default_registry()

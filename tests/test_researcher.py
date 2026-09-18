@@ -21,6 +21,7 @@ from app.graph.state import InvestigationState, InvestigationPlan, Entity, Entit
 from app.agents.researcher import researcher_agent, determine_next_task, generate_follow_up_task, extract_entities_from_results, merge_entities
 from app.tools.interfaces import SearchFilters
 from app.tools.mock_database import MockSearchDatabase
+from tests.test_helpers import create_test_state
 from app.tools.tool_registry import register_default_providers
 
 
@@ -228,45 +229,35 @@ class TestResearcherAgent(unittest.TestCase):
     def test_duplicate_search_avoidance(self):
         """Test that duplicate searches are avoided."""
         # Create state with existing searches
-        state: InvestigationState = {
-            "question": "Test question",
-            "investigation_plan": InvestigationPlan(
-                objective="Test objective",
-                entities=[],
-                required_evidence=[],
-                investigation_tasks=[
-                    InvestigationTask(
-                        task_id="task_1",
-                        description="Search for payment-api",
-                        task_type="search",
-                        priority="high",
-                        dependencies=[],
-                        expected_outcome="Documents"
-                    )
-                ],
-                unanswered_questions=[],
-                reasoning="Test reasoning"
-            ),
-            "discovered_entities": [Entity(entity_type=EntityType.SERVICE, value="payment-api", confidence=0.9)],
-            "searches_performed": [
-                {
-                    "task_id": "task_1",
-                    "tool_used": "search_by_service",
-                    "query_filters": "service: payment-api",
-                    "results_count": 5,
-                    "new_entities": [],
-                    "timestamp": "2024-01-01T00:00:00"
-                }
+        state = create_test_state("Test question", "test-001")
+        state["investigation_plan"] = InvestigationPlan(
+            objective="Test objective",
+            entities=[],
+            required_evidence=[],
+            investigation_tasks=[
+                InvestigationTask(
+                    task_id="task_1",
+                    description="Search for payment-api",
+                    task_type="search",
+                    priority="high",
+                    dependencies=[],
+                    expected_outcome="Documents"
+                )
             ],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+            unanswered_questions=[],
+            reasoning="Test reasoning"
+        )
+        state["discovered_entities"] = [Entity(entity_type=EntityType.SERVICE, value="payment-api", confidence=0.9)]
+        state["searches_performed"] = [
+            {
+                "task_id": "task_1",
+                "tool_used": "search_by_service",
+                "query_filters": "service: payment-api",
+                "results_count": 5,
+                "new_entities": [],
+                "timestamp": "2024-01-01T00:00:00"
+            }
+        ]
         
         # Run researcher - should not repeat the same search
         result_state = researcher_agent(state)
@@ -280,27 +271,16 @@ class TestResearcherAgent(unittest.TestCase):
     def test_iteration_limit_respect(self):
         """Test that iteration limit is respected."""
         # Create state at max iterations with no available tasks
-        state: InvestigationState = {
-            "question": "Test question",
-            "investigation_plan": InvestigationPlan(
-                objective="Test objective",
-                entities=[],
-                required_evidence=[],
-                investigation_tasks=[],  # No tasks available
-                unanswered_questions=[],
-                reasoning="Test reasoning"
-            ),
-            "discovered_entities": [],
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 5  # At max limit
-        }
+        state = create_test_state("Test question", "test-002")
+        state["investigation_plan"] = InvestigationPlan(
+            objective="Test objective",
+            entities=[],
+            required_evidence=[],
+            investigation_tasks=[],  # No tasks available
+            unanswered_questions=[],
+            reasoning="Test reasoning"
+        )
+        state["iteration_count"] = 5  # At max limit
         
         # Run researcher - should not perform new searches since no tasks available
         result_state = researcher_agent(state)

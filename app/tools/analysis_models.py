@@ -19,6 +19,41 @@ class EvidenceType(Enum):
     ENVIRONMENT = "environment"
     DEPENDENCY = "dependency"
     FAILURE_TYPE = "failure_type"
+    FACT = "fact"
+    CONFIGURATION = "configuration"
+    HISTORICAL_PRECEDENT = "historical_precedent"
+    TROUBLESHOOTING_GUIDANCE = "troubleshooting_guidance"
+    ARCHITECTURE = "architecture"
+    RELATIONSHIP = "relationship"
+
+
+class EvidenceGrade(Enum):
+    """Grades for evidence quality and reliability."""
+    DIRECT_EVIDENCE = "direct_evidence"
+    INFERRED = "inferred"
+    CORROBORATED = "corroborated"
+    CONTRADICTED = "contradicted"
+    UNKNOWN = "unknown"
+
+
+class ContradictionType(Enum):
+    """Types of contradictions that can be detected."""
+    VERSION_CONFLICT = "version_conflict"
+    DATE_CONFLICT = "date_conflict"
+    ROOT_CAUSE_CONFLICT = "root_cause_conflict"
+    GUIDANCE_CONFLICT = "guidance_conflict"
+    CONFIGURATION_CONFLICT = "configuration_conflict"
+    RELATIONSHIP_CONFLICT = "relationship_conflict"
+
+
+class DocumentRelationship(Enum):
+    """Relationships between documents."""
+    SUPERSEDES = "supersedes"
+    SUPERSEDED_BY = "superseded_by"
+    DEPRECATED = "deprecated"
+    REPLACES = "replaces"
+    RELATED = "related"
+    CONFLICTS = "conflicts"
 
 
 class Classification(Enum):
@@ -39,10 +74,19 @@ class CausationType(Enum):
 
 class EvidenceClaim(BaseModel):
     """A specific claim extracted from a document."""
+    evidence_id: str = Field(default="", description="Unique identifier for the evidence")
     claim: str = Field(description="The specific claim made in the document")
-    document_id: str = Field(description="Source document ID")
+    source_document_id: str = Field(description="Source document ID")
+    source_document_type: str = Field(default="", description="Type of source document")
+    source_date: str = Field(default="", description="Date of source document")
+    relevant_version: str = Field(default="", description="Relevant version if applicable")
+    relevant_service: str = Field(default="", description="Relevant service if applicable")
+    related_entity: str = Field(default="", description="Related entity (e.g., deployment_id, incident_id)")
+    relationship: str = Field(default="", description="Relationship to the investigation")
     evidence_type: EvidenceType = Field(description="Type of evidence")
+    grade: EvidenceGrade = Field(default=EvidenceGrade.UNKNOWN, description="Grade of evidence quality")
     confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Confidence in the claim")
+    supporting_text: str = Field(default="", description="Supporting text/reference from document")
     supports: List[str] = Field(default_factory=list, description="Other claims this supports")
     contradicts: List[str] = Field(default_factory=list, description="Other claims this contradicts")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
@@ -77,10 +121,20 @@ class IncidentComparison(BaseModel):
 
 class Contradiction(BaseModel):
     """A contradiction detected between documents."""
-    contradiction_type: str = Field(description="Type of contradiction")
+    contradiction_id: str = Field(default="", description="Unique identifier for the contradiction")
+    claim_a: str = Field(description="First conflicting claim")
+    source_a: str = Field(description="Source of first claim (document ID)")
+    claim_b: str = Field(description="Second conflicting claim")
+    source_b: str = Field(description="Source of second claim (document ID)")
+    contradiction_type: ContradictionType = Field(description="Type of contradiction")
     description: str = Field(description="Description of the contradiction")
     documents: List[str] = Field(default_factory=list, description="Document IDs involved")
     conflicting_claims: List[str] = Field(default_factory=list, description="The conflicting claims")
+    dates: List[str] = Field(default_factory=list, description="Relevant dates")
+    versions: List[str] = Field(default_factory=list, description="Relevant versions")
+    resolution_status: str = Field(default="unresolved", description="Status of resolution")
+    applicable_scope: str = Field(default="", description="Scope where contradiction applies")
+    explanation: str = Field(default="", description="Explanation of the contradiction")
     resolution: Optional[str] = Field(default=None, description="Potential resolution if available")
     confidence: float = Field(default=0.8, ge=0.0, le=1.0, description="Confidence in the contradiction")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
@@ -105,3 +159,24 @@ class EvidenceSufficiency(BaseModel):
     reasoning: str = Field(default="", description="Explanation of the assessment")
     required_evidence_types: List[EvidenceType] = Field(default_factory=list, description="Evidence types that are required")
     available_evidence_types: List[EvidenceType] = Field(default_factory=list, description="Evidence types that are available")
+
+
+class TimelineEvent(BaseModel):
+    """An event in the investigation timeline."""
+    timestamp: str = Field(description="Timestamp of the event")
+    event_type: str = Field(description="Type of event (deployment, incident, configuration_change, etc.)")
+    entity: str = Field(description="Entity involved (service, deployment_id, incident_id)")
+    source: str = Field(description="Source document ID")
+    description: str = Field(default="", description="Description of the event")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
+
+
+class DocumentRelationship(BaseModel):
+    """Relationship between documents."""
+    relationship_type: str = Field(description="Type of relationship (SUPERSEDES, SUPERSEDED_BY, DEPRECATED, REPLACES, RELATED, CONFLICTS)")
+    source_document_id: str = Field(description="Source document ID")
+    target_document_id: str = Field(description="Target document ID")
+    explanation: str = Field(default="", description="Explanation of the relationship")
+    applicable_version: str = Field(default="", description="Version where this relationship applies")
+    applicable_date: str = Field(default="", description="Date where this relationship applies")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional context")

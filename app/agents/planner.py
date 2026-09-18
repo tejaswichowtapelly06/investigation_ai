@@ -40,10 +40,13 @@ def planner_agent(state: InvestigationState) -> InvestigationState:
     
     # Update state with structured plan
     state["investigation_plan"] = investigation_plan
+    state["entities"] = entities  # Initial entities from question
     state["discovered_entities"] = entities  # Initialize with entities from question
+    state["required_evidence"] = investigation_plan.required_evidence
     state["iteration_count"] = 0
+    state["status"] = "researching"  # Transition to research phase
     
-    # Add investigation trace entry
+    # Add investigation trace entry with observability
     try:
         trace_entry = {
             "iteration": 0,
@@ -54,7 +57,8 @@ def planner_agent(state: InvestigationState) -> InvestigationState:
             "task_count": len(investigation_plan.investigation_tasks),
             "evidence_requirement_count": len(investigation_plan.required_evidence),
             "reasoning": investigation_plan.reasoning,
-            "timestamp": get_timestamp()
+            "timestamp": get_timestamp(),
+            "entities": [{"type": e.entity_type.value, "value": e.value} for e in entities]
         }
         state["investigation_trace"] = [trace_entry]
         logger.info("PLANNER - Added initial trace entry")

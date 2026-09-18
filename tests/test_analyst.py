@@ -21,6 +21,9 @@ from app.graph.state import InvestigationState, InvestigationPlan, Entity, Entit
 from app.agents.analyst import analyst_agent
 from app.tools.analysis_models import (
     Classification, CausationType, EvidenceType,
+)
+from tests.test_helpers import create_test_state
+from app.tools.analysis_models import (
     IncidentAttributes, IncidentComparison, Contradiction,
     CausationAnalysis, EvidenceSufficiency
 )
@@ -320,27 +323,16 @@ class TestAnalystAgent(unittest.TestCase):
         # Create state with documents
         docs = self.mock_database.search_by_service("payment-api")
         
-        state: InvestigationState = {
-            "question": "Test question",
-            "investigation_plan": InvestigationPlan(
-                objective="Test objective",
-                entities=[],
-                required_evidence=[],
-                investigation_tasks=[],
-                unanswered_questions=[],
-                reasoning="Test reasoning"
-            ),
-            "discovered_entities": [],
-            "searches_performed": [],
-            "retrieved_documents": [doc.model_dump() for doc in docs.documents],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state("Test question", "test-001")
+        state["investigation_plan"] = InvestigationPlan(
+            objective="Test objective",
+            entities=[],
+            required_evidence=[],
+            investigation_tasks=[],
+            unanswered_questions=[],
+            reasoning="Test reasoning"
+        )
+        state["retrieved_documents"] = [doc.model_dump() for doc in docs.documents]
         
         # Run analyst agent
         result_state = analyst_agent(state)

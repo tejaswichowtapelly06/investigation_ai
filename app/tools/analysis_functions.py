@@ -8,7 +8,8 @@ from datetime import datetime
 from app.tools.analysis_models import (
     EvidenceClaim, EvidenceType, Classification, CausationType,
     IncidentAttributes, IncidentComparison, Contradiction,
-    CausationAnalysis, EvidenceSufficiency
+    CausationAnalysis, EvidenceSufficiency, EvidenceGrade,
+    ContradictionType, TimelineEvent
 )
 from app.tools.interfaces import DocumentResult
 
@@ -213,13 +214,20 @@ def detect_contradictions(documents: List[DocumentResult]) -> List[Contradiction
                 existing = version_info[key]
                 if existing["date"] != doc.date:
                     contradictions.append(Contradiction(
-                        contradiction_type="version_conflict",
+                        contradiction_id=f"version_conflict_{doc.service}_{doc.version}",
+                        claim_a=f"Version {doc.version} dated {existing['date']}",
+                        source_a=existing["doc_id"],
+                        claim_b=f"Version {doc.version} dated {doc.date}",
+                        source_b=doc.document_id,
+                        contradiction_type=ContradictionType.VERSION_CONFLICT,
                         description=f"Conflicting version information for {doc.service} {doc.version}",
                         documents=[existing["doc_id"], doc.document_id],
                         conflicting_claims=[
                             f"Version {doc.version} dated {existing['date']}",
                             f"Version {doc.version} dated {doc.date}"
                         ],
+                        dates=[existing["date"], doc.date],
+                        versions=[doc.version],
                         resolution=None,
                         confidence=0.9,
                         metadata={"service": doc.service, "version": doc.version}
@@ -239,7 +247,12 @@ def detect_contradictions(documents: List[DocumentResult]) -> List[Contradiction
                         if doc.incident_id in root_causes:
                             if root_causes[doc.incident_id] != sentence.strip():
                                 contradictions.append(Contradiction(
-                                    contradiction_type="root_cause_conflict",
+                                    contradiction_id=f"root_cause_conflict_{doc.incident_id}",
+                                    claim_a=root_causes[doc.incident_id],
+                                    source_a=doc.document_id,
+                                    claim_b=sentence.strip(),
+                                    source_b=doc.document_id,
+                                    contradiction_type=ContradictionType.ROOT_CAUSE_CONFLICT,
                                     description=f"Conflicting root causes for incident {doc.incident_id}",
                                     documents=[doc.document_id],
                                     conflicting_claims=[root_causes[doc.incident_id], sentence.strip()],
@@ -264,13 +277,19 @@ def detect_contradictions(documents: List[DocumentResult]) -> List[Contradiction
         # Check if resolution is mentioned before incident
         if "resolution" in current_content and "incident" in next_content:
             contradictions.append(Contradiction(
-                contradiction_type="chronological_inconsistency",
+                contradiction_id=f"chronological_conflict_{current.document_id}_{next_doc.document_id}",
+                claim_a=f"Resolution in {current.document_id}",
+                source_a=current.document_id,
+                claim_b=f"Incident in {next_doc.document_id}",
+                source_b=next_doc.document_id,
+                contradiction_type=ContradictionType.DATE_CONFLICT,
                 description="Resolution mentioned before incident description",
                 documents=[current.document_id, next_doc.document_id],
                 conflicting_claims=[
                     f"Resolution in {current.document_id}",
                     f"Incident in {next_doc.document_id}"
                 ],
+                dates=[current.date, next_doc.date],
                 resolution=None,
                 confidence=0.8,
                 metadata={"date_order": f"{current.date} -> {next_doc.date}"}
@@ -289,7 +308,12 @@ def detect_contradictions(documents: List[DocumentResult]) -> List[Contradiction
                     # Identify newer guide
                     newer_guide = doc1 if doc1.date > doc2.date else doc2
                     contradictions.append(Contradiction(
-                        contradiction_type="guidance_conflict",
+                        contradiction_id=f"guidance_conflict_{doc1.document_id}_{doc2.document_id}",
+                        claim_a=f"Guidance in {doc1.document_id}",
+                        source_a=doc1.document_id,
+                        claim_b=f"Guidance in {doc2.document_id}",
+                        source_b=doc2.document_id,
+                        contradiction_type=ContradictionType.GUIDANCE_CONFLICT,
                         description=f"Conflicting troubleshooting guidance",
                         documents=[doc1.document_id, doc2.document_id],
                         conflicting_claims=[
@@ -495,6 +519,166 @@ def check_version_consistency(documents: List[DocumentResult]) -> List[Contradic
     logger.info(f"VERSION CONTRADICTIONS - {len(contradictions)}")
     
     return contradictions
+
+
+def grade_evidence(claim: EvidenceClaim, all_claims: List[EvidenceClaim], documents: List[DocumentResult]) -> EvidenceGrade:
+    """
+    Grade evidence based on multiple factors:
+    - Direct vs inferred evidence
+    - Corroboration from multiple sources
+    - Contradictory evidence
+    - Version/time applicability
+    """
+    # Count supporting claims (corroboration)
+    supporting_claims = [c for c in all_claims if claim.claim in c.supports]
+    
+    # Count contradictory claims
+    contradictory_claims = [c for c in all_claims if claim.claim in c.contradicts]
+    
+    # Check if claim is directly stated in document
+    source_doc = next((d for d in documents if d.document_id == claim.source_document_id), None)
+    is_direct = False
+    if source_doc:
+        # Direct evidence if claim text appears verbatim or with minor variations
+        content_lower = source_doc.content.lower()
+        claim_words = claim.claim.lower().split()[:5]  # Check first 5 words
+        if len(claim_words) >= 3:
+            phrase = " ".join(claim_words)
+            is_direct = phrase in content_lower
+    
+    # Determine grade
+    if contradictory_claims:
+        return EvidenceGrade.CONTRADICTED
+    elif is_direct and len(supporting_claims) >= 2:
+        return EvidenceGrade.CORROBORATED
+    elif is_direct:
+        return EvidenceGrade.DIRECT_EVIDENCE
+    elif len(supporting_claims) >= 2:
+        return EvidenceGrade.CORROBORATED
+    elif len(supporting_claims) >= 1:
+        return EvidenceGrade.INFERRED
+    else:
+        return EvidenceGrade.UNKNOWN
+
+
+def extract_evidence_claims(documents: List[DocumentResult]) -> List[EvidenceClaim]:
+    """
+    Extract structured evidence claims from documents with grading.
+    """
+    claims = []
+    
+    for doc in documents:
+        # Extract various types of claims
+        content_lower = doc.content.lower()
+        
+        # Symptom claims
+        symptom_keywords = ['slow', 'down', 'outage', 'crash', 'error', 'fail', 'timeout', 'latency', 'unavailable']
+        for keyword in symptom_keywords:
+            if keyword in content_lower:
+                claim = EvidenceClaim(
+                    evidence_id=f"{doc.document_id}_symptom_{keyword}",
+                    claim=f"Symptom: {keyword}",
+                    source_document_id=doc.document_id,
+                    source_document_type=doc.document_type,
+                    source_date=doc.date,
+                    relevant_service=doc.service,
+                    relevant_version=doc.version,
+                    related_entity=doc.incident_id,
+                    evidence_type=EvidenceType.SYMPTOM,
+                    grade=EvidenceGrade.UNKNOWN,
+                    supporting_text=doc.content[:200],
+                    metadata={"keyword": keyword}
+                )
+                claims.append(claim)
+        
+        # Root cause claims
+        if 'root cause' in content_lower:
+            sentences = doc.content.split('.')
+            for sentence in sentences:
+                if 'root cause' in sentence.lower():
+                    claim = EvidenceClaim(
+                        evidence_id=f"{doc.document_id}_root_cause",
+                        claim=sentence.strip(),
+                        source_document_id=doc.document_id,
+                        source_document_type=doc.document_type,
+                        source_date=doc.date,
+                        relevant_service=doc.service,
+                        relevant_version=doc.version,
+                        related_entity=doc.incident_id,
+                        evidence_type=EvidenceType.ROOT_CAUSE,
+                        grade=EvidenceGrade.UNKNOWN,
+                        supporting_text=sentence.strip(),
+                        metadata={"incident_id": doc.incident_id}
+                    )
+                    claims.append(claim)
+                    break
+        
+        # Deployment claims
+        if 'deployment' in content_lower or 'deploy' in content_lower:
+            claim = EvidenceClaim(
+                evidence_id=f"{doc.document_id}_deployment",
+                claim="Deployment-related event",
+                source_document_id=doc.document_id,
+                source_document_type=doc.document_type,
+                source_date=doc.date,
+                relevant_service=doc.service,
+                relevant_version=doc.version,
+                related_entity=doc.incident_id,
+                evidence_type=EvidenceType.DEPLOYMENT,
+                grade=EvidenceGrade.UNKNOWN,
+                supporting_text=doc.content[:200],
+                metadata={"deployment_context": True}
+            )
+            claims.append(claim)
+        
+        # Version claims
+        if doc.version:
+            claim = EvidenceClaim(
+                evidence_id=f"{doc.document_id}_version",
+                claim=f"Version: {doc.version}",
+                source_document_id=doc.document_id,
+                source_document_type=doc.document_type,
+                source_date=doc.date,
+                relevant_service=doc.service,
+                relevant_version=doc.version,
+                related_entity=doc.incident_id,
+                evidence_type=EvidenceType.VERSION,
+                grade=EvidenceGrade.DIRECT_EVIDENCE,
+                supporting_text=f"Document mentions version {doc.version}",
+                metadata={"version": doc.version}
+            )
+            claims.append(claim)
+    
+    # Grade all claims
+    for claim in claims:
+        claim.grade = grade_evidence(claim, claims, documents)
+    
+    logger.info(f"EVIDENCE CLAIMS EXTRACTED - {len(claims)} claims")
+    
+    return claims
+
+
+def compare_all_incidents(documents: List[DocumentResult]) -> List[IncidentComparison]:
+    """
+    Compare all incident documents against each other.
+    """
+    logger.info(f"COMPARING ALL INCIDENTS - {len(documents)} documents")
+    
+    # Extract incident attributes from documents
+    incident_docs = [doc for doc in documents if doc.incident_id]
+    attributes_list = [extract_incident_attributes(doc) for doc in incident_docs]
+    
+    comparisons = []
+    
+    # Compare each incident with every other incident
+    for i in range(len(attributes_list)):
+        for j in range(i + 1, len(attributes_list)):
+            comparison = compare_incidents(attributes_list[i], attributes_list[j])
+            comparisons.append(comparison)
+    
+    logger.info(f"INCIDENT COMPARISONS COMPLETE - {len(comparisons)} comparisons")
+    
+    return comparisons
 
 
 def evaluate_evidence_sufficiency(

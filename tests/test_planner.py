@@ -21,6 +21,7 @@ sys.path.insert(0, project_root)
 
 from app.graph.state import InvestigationState, InvestigationPlan, Entity, EntityType, RequiredEvidence, InvestigationTask
 from app.agents.planner import planner_agent, extract_entities_advanced, create_structured_investigation_plan
+from tests.test_helpers import create_test_state
 
 
 class TestPlannerAgent(unittest.TestCase):
@@ -31,19 +32,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "Why did the Order API become slow on September 16? Was the deployment related and have we seen this before?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-001")
         
         # Run planner agent
         result_state = planner_agent(state)
@@ -89,19 +78,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "Have we seen this payment service outage before? What were the similar incidents?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-002")
         
         # Run planner agent
         result_state = planner_agent(state)
@@ -143,19 +120,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "There are conflicting instructions in the troubleshooting guides. Which guidance is correct?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-003")
         
         # Run planner agent
         result_state = planner_agent(state)
@@ -187,19 +152,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "What caused the system failure in the legacy authentication module last night?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-004")
         
         # Run planner agent
         result_state = planner_agent(state)
@@ -296,19 +249,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "Why did the system crash?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-005")
         
         # Run planner agent
         result_state = planner_agent(state)
@@ -333,19 +274,7 @@ class TestPlannerAgent(unittest.TestCase):
         question = "What happened with the payment service?"
         
         # Create initial state
-        state: InvestigationState = {
-            "question": question,
-            "investigation_plan": {},
-            "searches_performed": [],
-            "retrieved_documents": [],
-            "evidence": [],
-            "contradictions": [],
-            "related_incidents": [],
-            "findings": [],
-            "evidence_sufficient": False,
-            "final_answer": None,
-            "iteration_count": 0
-        }
+        state = create_test_state(question, "test-006")
         
         # Run planner agent
         result_state = planner_agent(state)

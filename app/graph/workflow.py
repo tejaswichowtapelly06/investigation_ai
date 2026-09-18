@@ -1,5 +1,6 @@
 import logging
 from typing import Literal
+from datetime import datetime
 from langgraph.graph import StateGraph, END
 from app.graph.state import InvestigationState, InvestigationPlan
 from app.agents.planner import planner_agent
@@ -7,8 +8,88 @@ from app.agents.researcher import researcher_agent
 from app.agents.analyst import analyst_agent
 from app.tools.analysis_models import Classification
 from app.config.settings import settings
+from app.tools.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def create_investigation_graph(tool_registry: ToolRegistry = None):
+    """
+    Create the LangGraph investigation workflow.
+    
+    Args:
+        tool_registry: ToolRegistry instance for dependency injection.
+                      If None, agents will use global registry (deprecated).
+    """
+    logger.info("Creating investigation graph")
+    
+    # Create the graph
+    workflow = StateGraph(InvestigationState)
+    
+    # Add nodes with tool_registry parameter
+    workflow.add_node("planner", planner_agent)
+    workflow.add_node("researcher", lambda state: researcher_agent(state, tool_registry))
+    workflow.add_node("analyst", lambda state: analyst_agent(state, tool_registry))
+    workflow.add_node("report", report_generator)
+    
+    # Set entry point
+    workflow.set_entry_point("planner")
+    
+    # Add edges
+    workflow.add_edge("planner", "researcher")
+    workflow.add_edge("researcher", "analyst")
+    
+    # Add conditional edge from analyst
+    workflow.add_conditional_edges(
+        "analyst",
+        should_continue_research,
+        {
+            "researcher": "researcher",
+            "report": "report"
+        }
+    )
+    
+    # Add edge to END
+    workflow.add_edge("report", END)
+    
+    # Compile the graph
+    app = workflow.compile()
+    
+    logger.info("Investigation graph created successfully")
+    
+    return app
+
+
+def should_continue_research(state: InvestigationState) -> Literal["researcher", "report"]:
+    """
+    Conditional routing function: determines whether to continue research or generate report.
+    """
+    logger.info("=" * 60)
+    logger.info("ROUTING DECISION")
+    logger.info("=" * 60)
+    
+    evidence_sufficient = state.get("evidence_sufficient", False)
+    iteration_count = state.get("iteration_count", 0)
+    max_iterations = state.get("max_iterations", settings.MAX_ITERATIONS)
+    
+    logger.info(f"Evidence sufficient: {evidence_sufficient}")
+    logger.info(f"Iteration count: {iteration_count}/{max_iterations}")
+    
+    # Check if we've reached max iterations
+    if iteration_count >= max_iterations:
+        logger.info("ROUTING - Max iterations reached, proceeding to report")
+        logger.info("=" * 60)
+        return "report"
+    
+    # Check if evidence is sufficient
+    if evidence_sufficient:
+        logger.info("ROUTING - Evidence sufficient, proceeding to report")
+        logger.info("=" * 60)
+        return "report"
+    else:
+        logger.info("ROUTING - Evidence insufficient, continuing research")
+        logger.info("=" * 60)
+        return "researcher"
 
 
 def report_generator(state: InvestigationState) -> InvestigationState:
@@ -44,13 +125,16 @@ def report_generator(state: InvestigationState) -> InvestigationState:
             question, entities_dict, evidence, contradictions, related_incidents, findings,
             plan_objective, plan_reasoning
         )
+        state["status"] = "completed"
     else:
         final_answer = generate_insufficient_report(
             question, entities_dict, evidence, contradictions, related_incidents, findings, iteration_count,
             plan_objective, plan_reasoning
         )
+        state["status"] = "insufficient_evidence"
     
     state["final_answer"] = final_answer
+    state["completed_at"] = datetime.now().isoformat()
     
     logger.info("REPORT GENERATOR - Completed")
     logger.info("=" * 60)
@@ -255,76 +339,3 @@ def generate_insufficient_report(
     return "\n".join(report_lines)
 
 
-def should_continue_research(state: InvestigationState) -> Literal["researcher", "report"]:
-    """
-    Conditional routing function: determines whether to continue research or generate report.
-    """
-    logger.info("=" * 60)
-    logger.info("ROUTING DECISION")
-    logger.info("=" * 60)
-    
-    evidence_sufficient = state.get("evidence_sufficient", False)
-    iteration_count = state.get("iteration_count", 0)
-    max_iterations = settings.MAX_ITERATIONS
-    
-    logger.info(f"Evidence sufficient: {evidence_sufficient}")
-    logger.info(f"Iteration count: {iteration_count}/{max_iterations}")
-    
-    # Check if we've reached max iterations
-    if iteration_count >= max_iterations:
-        logger.info("ROUTING - Max iterations reached, proceeding to report")
-        logger.info("=" * 60)
-        return "report"
-    
-    # Check if evidence is sufficient
-    if evidence_sufficient:
-        logger.info("ROUTING - Evidence sufficient, proceeding to report")
-        logger.info("=" * 60)
-        return "report"
-    else:
-        logger.info("ROUTING - Evidence insufficient, continuing research")
-        logger.info("=" * 60)
-        return "researcher"
-
-
-def create_investigation_graph():
-    """
-    Create the LangGraph investigation workflow.
-    """
-    logger.info("Creating investigation graph")
-    
-    # Create the graph
-    workflow = StateGraph(InvestigationState)
-    
-    # Add nodes
-    workflow.add_node("planner", planner_agent)
-    workflow.add_node("researcher", researcher_agent)
-    workflow.add_node("analyst", analyst_agent)
-    workflow.add_node("report", report_generator)
-    
-    # Set entry point
-    workflow.set_entry_point("planner")
-    
-    # Add edges
-    workflow.add_edge("planner", "researcher")
-    workflow.add_edge("researcher", "analyst")
-    
-    # Add conditional edge from analyst
-    workflow.add_conditional_edges(
-        "analyst",
-        should_continue_research,
-        {
-            "researcher": "researcher",
-            "report": "report"
-        }
-    )
-    
-    # Add edge to END
-    workflow.add_edge("report", END)
-    
-    # Compile the graph
-    app = workflow.compile()
-    
-    logger.info("Investigation graph created successfully")
-    
-    return app

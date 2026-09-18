@@ -13,11 +13,15 @@ def get_timestamp() -> str:
     return datetime.now().isoformat()
 
 
-def analyst_agent(state: InvestigationState) -> InvestigationState:
+def analyst_agent(state: InvestigationState, tool_registry=None) -> InvestigationState:
     """
     Evidence Analyst Agent: Analyzes retrieved documents, compares incidents,
     detects contradictions, and determines if evidence is sufficient.
     Uses dependency injection for evidence tools.
+    
+    Args:
+        state: Current investigation state
+        tool_registry: ToolRegistry instance for dependency injection (optional, uses global for backward compatibility)
     """
     logger.info("=" * 60)
     logger.info("ANALYST AGENT - Starting evidence analysis")
@@ -41,7 +45,13 @@ def analyst_agent(state: InvestigationState) -> InvestigationState:
     
     # Get evidence tool from registry (dependency injection)
     try:
-        evidence_tool = get_tool_registry().get_evidence_tool()
+        if tool_registry is None:
+            # Fallback to global registry for backward compatibility
+            from app.tools.tool_registry import get_tool_registry
+            tool_registry = get_tool_registry()
+            logger.warning("ANALYST - Using global registry (deprecated, pass tool_registry parameter)")
+        
+        evidence_tool = tool_registry.get_evidence_tool()
         logger.info("ANALYST - Using injected evidence tool")
     except ValueError as e:
         logger.error(f"ANALYST - No evidence tool registered: {e}")
@@ -95,15 +105,21 @@ def analyst_agent(state: InvestigationState) -> InvestigationState:
         logger.error(f"ANALYST - Error generating findings: {e}")
         state["findings"] = ["Error generating findings"]
     
-    # Determine if evidence is sufficient
+    # Determine if evidence is sufficient using evidence tool
     try:
         investigation_plan = state.get("investigation_plan")
         from app.tools.analysis_functions import evaluate_evidence_sufficiency
+        from app.tools.analysis_functions import compare_all_incidents
+        
+        # Get incident comparisons for sufficiency evaluation
+        comparisons = compare_all_incidents(document_results)
+        
         sufficiency_analysis = evaluate_evidence_sufficiency(
-            document_results, [], contradictions, investigation_plan
+            document_results, comparisons, contradictions, investigation_plan
         )
         state["evidence_sufficient"] = sufficiency_analysis.is_sufficient
         state["evidence_gaps"] = sufficiency_analysis.evidence_gaps
+        state["evidence_sufficiency_assessment"] = sufficiency_analysis  # Store full assessment
         logger.info(f"ANALYST - Evidence sufficient: {sufficiency_analysis.is_sufficient}")
         logger.info(f"ANALYST - Evidence reasoning: {sufficiency_analysis.reasoning}")
         if sufficiency_analysis.evidence_gaps:
@@ -113,7 +129,7 @@ def analyst_agent(state: InvestigationState) -> InvestigationState:
         state["evidence_sufficient"] = False
         state["evidence_gaps"] = []
     
-    # Add investigation trace entry
+    # Add investigation trace entry with observability
     try:
         trace_entry = {
             "iteration": state.get("iteration_count", 0),
@@ -125,7 +141,9 @@ def analyst_agent(state: InvestigationState) -> InvestigationState:
             "evidence_sufficient": state["evidence_sufficient"],
             "evidence_gaps": state.get("evidence_gaps", []),
             "findings_count": len(state.get("findings", [])),
-            "timestamp": get_timestamp()
+            "timestamp": get_timestamp(),
+            "evidence_types": list(set([e.get("evidence_type", "unknown") for e in evidence])),
+            "contradiction_types": list(set([c.get("contradiction_type", "unknown") for c in contradictions]))
         }
         investigation_trace = state.get("investigation_trace", [])
         investigation_trace.append(trace_entry)

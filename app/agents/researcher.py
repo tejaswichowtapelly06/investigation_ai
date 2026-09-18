@@ -13,10 +13,14 @@ def get_timestamp() -> str:
     return datetime.now().isoformat()
 
 
-def researcher_agent(state: InvestigationState) -> InvestigationState:
+def researcher_agent(state: InvestigationState, tool_registry=None) -> InvestigationState:
     """
     Researcher Agent: Performs searches based on investigation plan and discovered evidence.
     Implements multi-hop investigation using tool interfaces with dependency injection.
+    
+    Args:
+        state: Current investigation state
+        tool_registry: ToolRegistry instance for dependency injection (optional, uses global for backward compatibility)
     """
     logger.info("=" * 60)
     logger.info("RESEARCHER AGENT - Starting investigation")
@@ -25,7 +29,13 @@ def researcher_agent(state: InvestigationState) -> InvestigationState:
     
     # Get search tool from registry (dependency injection)
     try:
-        search_tool = get_tool_registry().get_search_tool()
+        if tool_registry is None:
+            # Fallback to global registry for backward compatibility
+            from app.tools.tool_registry import get_tool_registry
+            tool_registry = get_tool_registry()
+            logger.warning("RESEARCHER - Using global registry (deprecated, pass tool_registry parameter)")
+        
+        search_tool = tool_registry.get_search_tool()
         logger.info("RESEARCHER - Using injected search tool")
     except ValueError as e:
         logger.error(f"RESEARCHER - No search tool registered: {e}")
@@ -109,6 +119,7 @@ def researcher_agent(state: InvestigationState) -> InvestigationState:
         state["searches_performed"] = searches_performed
         state["retrieved_documents"] = retrieved_documents
         state["iteration_count"] = iteration_count + 1
+        state["status"] = "analyzing"  # Transition to analysis phase
         
         # Add investigation trace entry
         try:
@@ -125,7 +136,9 @@ def researcher_agent(state: InvestigationState) -> InvestigationState:
                 "total_documents": len(retrieved_documents),
                 "total_entities": len(updated_entities),
                 "addressed_gaps": evidence_gaps,
-                "timestamp": get_timestamp()
+                "timestamp": get_timestamp(),
+                "new_entities": [{"type": e.entity_type.value, "value": e.value} for e in new_entities],
+                "document_ids": [doc.document_id for doc in new_documents_dict]
             }
             investigation_trace = state.get("investigation_trace", [])
             investigation_trace.append(trace_entry)

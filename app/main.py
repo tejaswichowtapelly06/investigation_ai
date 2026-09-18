@@ -1,9 +1,10 @@
 import logging
 import sys
 import os
+from datetime import datetime
 from app.graph.state import InvestigationState, InvestigationPlan
 from app.graph.workflow import create_investigation_graph
-from app.tools.tool_registry import register_default_providers
+from app.tools.tool_registry import create_default_registry
 from app.config.settings import settings
 
 # Set UTF-8 encoding for Windows console
@@ -25,46 +26,84 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Register default tool providers (dependency injection)
-try:
-    register_default_providers()
-    logger.info("Default tool providers registered successfully")
-except Exception as e:
-    logger.error(f"Failed to register tool providers: {e}")
-    logger.warning("Investigation may fail if tools are not registered")
+# Create tool registry with dependency injection
+# This registry will be passed to agents for proper dependency injection
+if settings.USE_MOCK_DATA:
+    tool_registry = create_default_registry()
+    logger.info("Tool registry created with mock providers")
+else:
+    tool_registry = create_production_registry()
+    logger.info("Tool registry created with production providers")
 
 
-def run_investigation(question: str) -> InvestigationState:
+def run_investigation(question: str, tool_registry=None) -> InvestigationState:
     """
     Run an investigation with the given question.
+    
+    Args:
+        question: Investigation question
+        tool_registry: ToolRegistry instance for dependency injection (optional)
     """
+    import uuid
     logger.info("=" * 60)
     logger.info("STARTING INVESTIGATION")
     logger.info("=" * 60)
     logger.info(f"Question: {question}")
     logger.info("=" * 60)
     
+    # Use global tool_registry if none provided (backward compatibility)
+    if tool_registry is None:
+        tool_registry = create_default_registry()
+        logger.info("Using default tool registry")
+    
     # Initialize state
     initial_state: InvestigationState = {
+        # Identification
+        "investigation_id": str(uuid.uuid4()),  # Unique investigation ID
         "question": question,
+        
+        # Planning phase
         "investigation_plan": {},  # Will be populated by Planner Agent
-        "discovered_entities": [],  # Entities discovered during investigation
+        "entities": [],  # Entities extracted from question (initial)
+        "discovered_entities": [],  # Entities discovered during investigation (cumulative)
+        "required_evidence": [],  # Evidence required to answer the question
+        
+        # Research phase
         "searches_performed": [],
         "retrieved_documents": [],
+        
+        # Analysis phase
         "evidence": [],
         "contradictions": [],
         "related_incidents": [],
         "findings": [],
+        
+        # Evaluation phase
         "evidence_sufficient": False,
-        "evidence_gaps": [],  # Missing evidence types
-        "investigation_trace": [],  # Structured trace
+        "evidence_gaps": [],  # Missing evidence types identified by Analyst
+        "evidence_sufficiency_assessment": None,  # Detailed sufficiency assessment
+        
+        # Lifecycle management
+        "status": "planning",  # Initial status
+        "iteration_count": 0,
+        "max_iterations": settings.MAX_ITERATIONS,  # Maximum iterations to prevent infinite loops
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        
+        # Observability
+        "investigation_trace": [],  # Structured trace of investigation steps
+        
+        # Output
         "final_answer": None,
-        "iteration_count": 0
+        
+        # Error handling
+        "error": None,
+        "error_details": None
     }
     
     # Create and run the graph
     try:
-        graph = create_investigation_graph()
+        graph = create_investigation_graph(tool_registry)
         logger.info("Graph created successfully")
         
         # Execute the graph
