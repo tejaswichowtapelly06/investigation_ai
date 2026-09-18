@@ -1,0 +1,92 @@
+[
+  {
+    "document_id": "INC-1042",
+    "type": "incident_report",
+    "service": "orders-api",
+    "date": "2026-09-16",
+    "version": "v2.8.1",
+    "title": "Order API latency spike",
+    "content": "P95 latency increased significantly on the orders-api service starting on 2026-09-16. The incident began shortly after the latest deployment. Requests to /orders and /orders/{id} were affected, with P95 latency rising from ~120ms to over 1800ms. Error rates remained low but timeouts increased on downstream callers. On-call engineers observed elevated database connection pool wait times during the incident window."
+  },
+  {
+    "document_id": "DEP-882",
+    "type": "deployment_note",
+    "service": "orders-api",
+    "date": "2026-09-15",
+    "version": "v2.8.1",
+    "title": "Orders deployment",
+    "content": "Version v2.8.1 was deployed to production at 18:10 UTC on 2026-09-15. This release included a change to the connection pooling configuration for the orders database client and a new caching layer for order lookups. No issues were observed in the immediate post-deploy health checks."
+  },
+  {
+    "document_id": "PM-211",
+    "type": "postmortem",
+    "service": "orders-api",
+    "date": "2026-05-03",
+    "version": "v2.6.0",
+    "title": "Previous latency incident",
+    "content": "A previous latency incident on orders-api was caused by database connection saturation during a schema migration. The migration held long-running locks on the orders table, causing the connection pool to exhaust and request latency to spike. Root cause was identified as insufficient connection pool sizing during migration windows. Remediation: schema migrations must now run during low-traffic windows with a temporarily increased pool size."
+  },
+  {
+    "document_id": "GUIDE-12",
+    "type": "troubleshooting",
+    "service": null,
+    "date": "2024-02-01",
+    "version": "v1",
+    "title": "Service restart procedure",
+    "content": "General on-call guidance: restart Service A when latency remains high after initial triage. A restart typically clears transient memory pressure and resets connection pools, resolving most latency-related incidents within a few minutes."
+  },
+  {
+    "document_id": "GUIDE-41",
+    "type": "troubleshooting",
+    "service": null,
+    "date": "2026-08-10",
+    "version": "v3",
+    "title": "Service A incident procedure",
+    "content": "Updated incident procedure for Service A (supersedes GUIDE-12 for dependency-related failures): Do not restart Service A during dependency failures. Restarting during a dependency outage clears in-memory circuit breaker state and can cause a retry storm against the already-degraded dependency, worsening the incident. Check dependency health first using the status dashboard, and only restart Service A if dependencies are healthy and latency is still elevated."
+  },
+  {
+    "document_id": "INC-300",
+    "type": "incident_report",
+    "service": "catalog-api",
+    "date": "2026-07-11",
+    "version": "v5",
+    "title": "Catalog latency",
+    "content": "Latency increased on catalog-api due to database saturation. The catalog database experienced high read load from an unoptimized query introduced in the previous release, causing connection pool exhaustion and elevated P95 latency across all catalog endpoints."
+  },
+  {
+    "document_id": "INC-301",
+    "type": "incident_report",
+    "service": "orders-api",
+    "date": "2026-07-12",
+    "version": "v4",
+    "title": "Order errors",
+    "content": "Requests to orders-api failed because of an expired TLS certificate on the internal payment gateway integration. The certificate expired at 02:00 UTC, causing all payment verification calls to fail with TLS handshake errors until the certificate was rotated."
+  },
+  {
+    "document_id": "ARCH-05",
+    "type": "architecture_doc",
+    "service": "orders-api",
+    "date": "2026-01-10",
+    "version": "v2.5.0",
+    "title": "Orders API architecture overview",
+    "content": "The orders-api service handles order creation, lookup, and status updates. It connects to a PostgreSQL database via a pooled connection client and depends on the payments service and catalog service for order validation. A Redis-backed cache layer was introduced in v2.8.0 for order lookups to reduce database read load."
+  },
+  {
+    "document_id": "CUST-77",
+    "type": "customer_complaint",
+    "service": "orders-api",
+    "date": "2026-09-16",
+    "version": null,
+    "title": "Customer reports slow checkout",
+    "content": "Multiple customers reported that placing and viewing orders was very slow on the afternoon of September 16, with some checkout attempts timing out entirely. Reports concentrated between 14:00 and 17:00 UTC."
+  },
+  {
+    "document_id": "ENG-DISC-19",
+    "type": "engineering_discussion",
+    "service": "orders-api",
+    "date": "2026-09-16",
+    "version": "v2.8.1",
+    "title": "Slack thread: orders-api latency investigation",
+    "content": "Engineering discussion during the September 16 incident: initial suspicion was the new caching layer in v2.8.1, but metrics showed cache hit rates were normal. Attention shifted to the connection pooling configuration change in the same release, which reduced the default max pool size. Database connection wait time metrics correlated closely with the latency spike."
+  }
+]

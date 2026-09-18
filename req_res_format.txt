@@ -1,0 +1,35 @@
+POST /investigate
+
+REQUEST
+{
+    question: string
+}
+
+RESPONSE
+{
+    answer: string,
+    confidence: string,
+
+    evidence: [
+        {
+            document_id: string,
+            title: string,
+            type: string,
+            date: string | null,
+            version: string | null,
+            content: string
+        }
+    ],
+
+    contradictions: [
+        {
+            title: string,
+            description: string
+        }
+    ],
+
+    trace: [
+        string
+    ]
+}
+

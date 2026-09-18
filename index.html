@@ -1,0 +1,926 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Incident Investigation Agent</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        .navbar {
+            height: 70px;
+            background: #111827;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+        }
+
+        .logo {
+            font-size: 21px;
+            font-weight: bold;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #d1d5db;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
+            background: #22c55e;
+            border-radius: 50%;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 35px auto;
+            padding: 0 20px;
+        }
+
+        .heading {
+            margin-bottom: 25px;
+        }
+
+        .heading h1 {
+            font-size: 30px;
+            margin-bottom: 8px;
+        }
+
+        .heading p {
+            color: #6b7280;
+            font-size: 15px;
+        }
+
+        .search-card,
+        .answer-card {
+            background: white;
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        }
+
+        .search-card {
+            margin-bottom: 25px;
+        }
+
+        .search-card label {
+            font-size: 14px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .search-area {
+            display: flex;
+            gap: 12px;
+        }
+
+        textarea {
+            flex: 1;
+            min-height: 70px;
+            resize: vertical;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #4f46e5;
+        }
+
+        .investigate-btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 25px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            height: 50px;
+        }
+
+        .investigate-btn:hover {
+            background: #4338ca;
+        }
+
+        .investigate-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .error {
+            display: none;
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: none;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .spinner {
+            width: 35px;
+            height: 35px;
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: auto auto 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .answer {
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .evidence-item {
+            border-left: 4px solid #4f46e5;
+            padding: 12px 15px;
+            background: #f9fafb;
+            margin-bottom: 12px;
+            border-radius: 5px;
+        }
+
+        .document-id {
+            font-weight: bold;
+            color: #4f46e5;
+            font-size: 14px;
+        }
+
+        .document-title {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .document-meta {
+            color: #6b7280;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .document-content {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .contradiction {
+            background: #fff7ed;
+            border-left: 4px solid #f97316;
+            padding: 14px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+        }
+
+        .contradiction-title {
+            font-weight: bold;
+            color: #c2410c;
+            margin-bottom: 5px;
+        }
+
+        .contradiction-description {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 9px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge-green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .badge-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .trace-item {
+            display: flex;
+            gap: 15px;
+            padding: 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .trace-number {
+            background: #4f46e5;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .trace-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .empty {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        @media (max-width: 800px) {
+            .search-area {
+                flex-direction: column;
+            }
+
+            .investigate-btn {
+                height: 45px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .navbar {
+                padding: 0 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar">
+
+        <div class="logo">
+            🔎 Incident Investigation Agent
+        </div>
+
+        <div class="status">
+            <div class="status-dot"></div>
+            Agent Online
+        </div>
+
+    </nav>
+
+
+    <main class="container">
+
+        <div class="heading">
+
+            <h1>Investigate an Incident</h1>
+
+            <p>
+                Investigate operational incidents across internal documents.
+            </p>
+
+        </div>
+
+
+        <section class="search-card">
+
+            <label for="question">
+                Investigation Question
+            </label>
+
+            <div class="search-area">
+
+                <textarea
+                    id="question"
+                    placeholder="Enter your investigation question..."
+                ></textarea>
+
+                <button
+                    id="investigateButton"
+                    class="investigate-btn"
+                    onclick="investigate()">
+                    Investigate
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <div
+            id="error"
+            class="error">
+        </div>
+
+
+        <div
+            id="loading"
+            class="loading">
+
+            <div class="spinner"></div>
+
+            <p>
+                Investigating documents...
+            </p>
+
+        </div>
+
+
+        <section
+            id="results"
+            class="results">
+
+
+            <div class="answer-card">
+
+                <div class="card-title">
+                    Investigation Result
+                </div>
+
+                <span
+                    id="confidence"
+                    class="badge badge-green">
+                </span>
+
+                <div
+                    id="answer"
+                    class="answer"
+                    style="margin-top: 15px;">
+                </div>
+
+            </div>
+
+
+            <div class="grid">
+
+
+                <div class="answer-card">
+
+                    <div class="card-title">
+                        📄 Evidence
+                    </div>
+
+                    <div id="evidence">
+                    </div>
+
+                </div>
+
+
+                <div class="answer-card">
+
+                    <div class="card-title">
+                        ⚠️ Contradictions & Warnings
+                    </div>
+
+                    <div id="contradictions">
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                class="answer-card"
+                style="margin-top: 20px;">
+
+                <div class="card-title">
+                    🧠 Investigation Trace
+                </div>
+
+                <div id="trace">
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <script>
+
+        const BACKEND_URL =
+            "http://localhost:8000";
+
+
+        async function investigate() {
+
+            const questionElement =
+                document.getElementById("question");
+
+            const button =
+                document.getElementById("investigateButton");
+
+            const question =
+                questionElement.value.trim();
+
+
+            if (!question) {
+
+                showError(
+                    "Please enter an investigation question."
+                );
+
+                return;
+            }
+
+
+            hideError();
+
+            hideResults();
+
+            showLoading();
+
+            button.disabled = true;
+
+
+            try {
+
+                const response = await fetch(
+                    `${BACKEND_URL}/investigate`,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            question: question
+                        })
+                    }
+                );
+
+
+                if (!response.ok) {
+
+                    let errorMessage =
+                        `Backend error: ${response.status}`;
+
+                    try {
+
+                        const errorData =
+                            await response.json();
+
+                        if (errorData.detail) {
+                            errorMessage =
+                                errorData.detail;
+                        }
+
+                    } catch (_) {
+                        // Backend did not return JSON.
+                    }
+
+                    throw new Error(errorMessage);
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                displayResults(data);
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Investigation failed:",
+                    error
+                );
+
+                showError(
+                    error.message ||
+                    "Unable to connect to the backend."
+                );
+
+            }
+
+            finally {
+
+                hideLoading();
+
+                button.disabled = false;
+
+            }
+
+        }
+
+
+        function displayResults(data) {
+
+            document.getElementById("answer").innerText =
+                data.answer || "No answer returned.";
+
+
+            const confidence =
+                document.getElementById("confidence");
+
+            confidence.innerText =
+                data.confidence || "Unknown";
+
+
+            confidence.className =
+                "badge " +
+                getConfidenceClass(data.confidence);
+
+
+            displayEvidence(
+                data.evidence || []
+            );
+
+
+            displayContradictions(
+                data.contradictions || []
+            );
+
+
+            displayTrace(
+                data.trace || []
+            );
+
+
+            document.getElementById("results").style.display =
+                "block";
+
+        }
+
+
+        function getConfidenceClass(confidence) {
+
+            if (!confidence) {
+                return "badge-yellow";
+            }
+
+            const value =
+                confidence.toLowerCase();
+
+
+            if (
+                value.includes("supported") ||
+                value.includes("high") ||
+                value.includes("sufficient")
+            ) {
+                return "badge-green";
+            }
+
+
+            if (
+                value.includes("insufficient") ||
+                value.includes("low") ||
+                value.includes("unknown")
+            ) {
+                return "badge-red";
+            }
+
+
+            return "badge-yellow";
+
+        }
+
+
+        function displayEvidence(evidence) {
+
+            const container =
+                document.getElementById("evidence");
+
+            container.innerHTML = "";
+
+
+            if (!evidence.length) {
+
+                container.innerHTML =
+                    '<p class="empty">No evidence found.</p>';
+
+                return;
+
+            }
+
+
+            evidence.forEach(doc => {
+
+                const item =
+                    document.createElement("div");
+
+                item.className =
+                    "evidence-item";
+
+
+                item.innerHTML = `
+
+                    <div class="document-id">
+                        ${escapeHtml(
+                            doc.document_id || "Unknown"
+                        )}
+                    </div>
+
+                    <div class="document-title">
+                        ${escapeHtml(
+                            doc.title || "Untitled document"
+                        )}
+                    </div>
+
+                    <div class="document-meta">
+                        ${escapeHtml(
+                            doc.type || "Unknown type"
+                        )}
+
+                        •
+
+                        ${escapeHtml(
+                            doc.date || "Unknown date"
+                        )}
+
+                        •
+
+                        ${escapeHtml(
+                            doc.version || "Unknown version"
+                        )}
+                    </div>
+
+                    <div class="document-content">
+                        ${escapeHtml(
+                            doc.content || ""
+                        )}
+                    </div>
+
+                `;
+
+
+                container.appendChild(item);
+
+            });
+
+        }
+
+
+        function displayContradictions(items) {
+
+            const container =
+                document.getElementById("contradictions");
+
+            container.innerHTML = "";
+
+
+            if (!items.length) {
+
+                container.innerHTML =
+                    '<p class="empty">No contradictions detected.</p>';
+
+                return;
+
+            }
+
+
+            items.forEach(item => {
+
+                const div =
+                    document.createElement("div");
+
+                div.className =
+                    "contradiction";
+
+
+                if (typeof item === "string") {
+
+                    div.innerHTML = `
+
+                        <div class="contradiction-title">
+                            Warning
+                        </div>
+
+                        <div class="contradiction-description">
+                            ${escapeHtml(item)}
+                        </div>
+
+                    `;
+
+                }
+
+                else {
+
+                    div.innerHTML = `
+
+                        <div class="contradiction-title">
+                            ${escapeHtml(
+                                item.title ||
+                                "Potential contradiction"
+                            )}
+                        </div>
+
+                        <div class="contradiction-description">
+                            ${escapeHtml(
+                                item.description ||
+                                ""
+                            )}
+                        </div>
+
+                    `;
+
+                }
+
+
+                container.appendChild(div);
+
+            });
+
+        }
+
+
+        function displayTrace(items) {
+
+            const container =
+                document.getElementById("trace");
+
+            container.innerHTML = "";
+
+
+            if (!items.length) {
+
+                container.innerHTML =
+                    '<p class="empty">No investigation trace returned.</p>';
+
+                return;
+
+            }
+
+
+            items.forEach((item, index) => {
+
+                const div =
+                    document.createElement("div");
+
+                div.className =
+                    "trace-item";
+
+
+                const text =
+                    typeof item === "string"
+                        ? item
+                        : item.description || "";
+
+
+                div.innerHTML = `
+
+                    <div class="trace-number">
+                        ${index + 1}
+                    </div>
+
+                    <div class="trace-text">
+                        ${escapeHtml(text)}
+                    </div>
+
+                `;
+
+
+                container.appendChild(div);
+
+            });
+
+        }
+
+
+        function showLoading() {
+
+            document.getElementById("loading")
+                .style.display = "block";
+
+        }
+
+
+        function hideLoading() {
+
+            document.getElementById("loading")
+                .style.display = "none";
+
+        }
+
+
+        function hideResults() {
+
+            document.getElementById("results")
+                .style.display = "none";
+
+        }
+
+
+        function showError(message) {
+
+            const error =
+                document.getElementById("error");
+
+            error.innerText =
+                message;
+
+            error.style.display =
+                "block";
+
+        }
+
+
+        function hideError() {
+
+            document.getElementById("error")
+                .style.display = "none";
+
+        }
+
+
+        function escapeHtml(value) {
+
+            const div =
+                document.createElement("div");
+
+            div.textContent =
+                value;
+
+            return div.innerHTML;
+
+        }
+
+
+        /*
+         * Allow Ctrl + Enter to investigate.
+         */
+
+        document
+            .getElementById("question")
+            .addEventListener(
+                "keydown",
+                function(event) {
+
+                    if (
+                        event.ctrlKey &&
+                        event.key === "Enter"
+                    ) {
+
+                        investigate();
+
+                    }
+
+                }
+            );
+
+    </script>
+
+</body>
+</html>
+```
