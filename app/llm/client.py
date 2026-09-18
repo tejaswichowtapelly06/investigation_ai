@@ -12,7 +12,7 @@ class LLMError(RuntimeError):
 
 
 class LLMClient:
-    """Thin wrapper around the Google Gemini Interactions API."""
+    """Thin wrapper around the Google Gemini Generate Content API."""
 
     def __init__(
         self,
@@ -50,32 +50,34 @@ class LLMClient:
 
         prompt = f"""
 System instructions:
+
 {system}
 
 User request:
+
 {user}
 """.strip()
 
         try:
-            interaction = client.interactions.create(
+            response = client.models.generate_content(
                 model=self.model,
-                input=prompt,
-                generation_config={
+                contents=prompt,
+                config={
                     "temperature": temperature,
                     "max_output_tokens": max_tokens,
                 },
             )
+
         except Exception as exc:
             raise LLMError(f"LLM request failed: {exc}") from exc
 
-        text = getattr(interaction, "output_text", None)
+        text = getattr(response, "text", None)
 
         if text:
             return text.strip()
 
         raise LLMError(
-            f"Gemini returned no text output. "
-            f"Interaction status: {getattr(interaction, 'status', 'unknown')}"
+            "Gemini returned no text output."
         )
 
     def complete_json(
@@ -88,13 +90,13 @@ User request:
         """Return a parsed JSON object from Gemini."""
 
         json_system = f"""
-    {system}
+{system}
 
-    IMPORTANT:
-    Return ONLY valid JSON.
-    Do not use markdown.
-    Do not wrap the JSON in ``` or any other code fence.
-    """.strip()
+IMPORTANT:
+Return ONLY valid JSON.
+Do not use markdown.
+Do not wrap the JSON in ``` or any other code fence.
+""".strip()
 
         raw = self.complete(
             system=json_system,
@@ -107,7 +109,9 @@ User request:
 
         try:
             return json.loads(cleaned)
+
         except json.JSONDecodeError:
+            # Try to extract a JSON object from surrounding text
             match = re.search(r"\{.*\}", cleaned, re.DOTALL)
 
             if match:
@@ -123,14 +127,25 @@ User request:
 
 _default_client: Optional[LLMClient] = None
 
+
 def _strip_code_fences(text: str) -> str:
     text = text.strip()
 
     if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"```$", "", text.strip())
+        text = re.sub(
+            r"^```[a-zA-Z]*\n?",
+            "",
+            text,
+        )
+
+        text = re.sub(
+            r"```$",
+            "",
+            text.strip(),
+        )
 
     return text.strip()
+
 
 def get_llm_client() -> LLMClient:
     global _default_client
