@@ -7,6 +7,12 @@
 
     <title>Incident Investigation Agent</title>
 
+    <script>
+        if (window.location.protocol === "file:") {
+            window.location.replace("http://localhost:8000/ui");
+        }
+    </script>
+
     <style>
         * {
             box-sizing: border-box;
@@ -375,7 +381,7 @@
 
             <div class="spinner"></div>
 
-            <p>
+            <p id="loadingMessage">
                 Investigating documents...
             </p>
 
@@ -457,7 +463,55 @@
     <script>
 
         const BACKEND_URL =
-            "http://localhost:8000";
+            "http://127.0.0.1:8000";
+
+        const QUESTION_DRAFT_KEY =
+            "incident-investigation-question";
+
+        function saveQuestionDraft(value) {
+            try {
+                localStorage.setItem(
+                    QUESTION_DRAFT_KEY,
+                    value
+                );
+            } catch (_) {
+                // Browser storage may be unavailable for local HTML files.
+            }
+        }
+
+        function wait(milliseconds) {
+            return new Promise(resolve => setTimeout(resolve, milliseconds));
+        }
+
+        async function requestInvestigation(question) {
+            let lastError;
+
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    return await fetch(
+                        `${BACKEND_URL}/investigate`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                question: question
+                            })
+                        }
+                    );
+                } catch (error) {
+                    lastError = error;
+                    if (attempt < 3) {
+                        document.getElementById("loadingMessage").innerText =
+                            `Reconnecting to the investigation service (${attempt}/3)...`;
+                        await wait(1000);
+                    }
+                }
+            }
+
+            throw lastError;
+        }
 
 
         async function investigate() {
@@ -484,29 +538,20 @@
 
             hideError();
 
+            saveQuestionDraft(questionElement.value);
+
             hideResults();
 
             showLoading();
 
             button.disabled = true;
+            button.innerText = "Investigating...";
 
 
             try {
 
-                const response = await fetch(
-                    `${BACKEND_URL}/investigate`,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-
-                        body: JSON.stringify({
-                            question: question
-                        })
-                    }
-                );
+                const response =
+                    await requestInvestigation(question);
 
 
                 if (!response.ok) {
@@ -542,6 +587,8 @@
 
             catch (error) {
 
+                questionElement.value = question;
+
                 console.error(
                     "Investigation failed:",
                     error
@@ -559,6 +606,10 @@
                 hideLoading();
 
                 button.disabled = false;
+                button.innerText = "Investigate";
+
+                // Keep the submitted question visible after a slow first request.
+                questionElement.value = question;
 
             }
 
@@ -919,8 +970,26 @@
                 }
             );
 
+        const questionInput =
+            document.getElementById("question");
+
+        // Start with a clean question box after every page refresh.
+        questionInput.value = "";
+
+        try {
+            localStorage.removeItem(QUESTION_DRAFT_KEY);
+        } catch (_) {
+            // Browser storage may be unavailable for local HTML files.
+        }
+
+        questionInput.addEventListener(
+            "input",
+            function() {
+                saveQuestionDraft(questionInput.value);
+            }
+        );
+
     </script>
 
 </body>
 </html>
-```

@@ -17,13 +17,18 @@ _collection = None
 
 
 def get_embedder():
-    """Lazily load the sentence-transformers embedding model."""
+    """Load the sentence-transformers embedding model once per process."""
     global _embedder
     if _embedder is None:
         from sentence_transformers import SentenceTransformer
 
         _embedder = SentenceTransformer(settings.embedding_model)
     return _embedder
+
+
+def warm_up() -> None:
+    """Load the local embedding model during API startup."""
+    get_embedder()
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
